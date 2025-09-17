@@ -77,3 +77,48 @@ L’applicazione **EnergyGuard** è stata progettata per simulare, raccogliere e
   | Redis KVS   |      | Historical DB    |
   | (real-time) |      | (analisi futura) |
   +-------------+      +------------------+
+```
+---
+
+## Componenti
+
+### Docker
+Docker viene utilizzato per eseguire in container i servizi esterni di cui l’applicazione ha bisogno (Kafka e Redis), senza doverli installare manualmente sul sistema.  
+Con **Docker Compose** è possibile avviare l’intero stack con un solo comando (`docker compose up -d`), garantendo:
+- **Portabilità**: l’app gira in modo identico su qualunque macchina con Docker installato.
+- **Isolamento**: i servizi vivono nei propri container senza interferire con l’ambiente locale.
+- **Semplicità di setup**: niente configurazioni complicate, tutto pronto con il file `docker-compose.yml`.
+
+---
+
+### Kafka
+Kafka rappresenta il cuore della comunicazione dell’applicazione, implementando il modello **publish/subscribe**.  
+- Il **simulatore di sensori** (producer) pubblica letture su un *topic* (`energyguard.readings`).  
+- I **consumer** (ingestor, archiver, anomaly detector) si iscrivono al topic e ricevono i dati.  
+
+Caratteristiche principali:
+- **Buffer e persistenza temporanea**: i messaggi rimangono disponibili per un certo tempo (retention).
+- **Scalabilità**: più consumer possono leggere in parallelo senza interferenze.
+- **Affidabilità**: ogni consumer mantiene il proprio offset e può riprendere da dove era rimasto.
+
+---
+
+### Redis
+Redis viene utilizzato come **Key-Value Store in RAM** per la gestione dei dati in tempo reale.  
+Il consumer *ingestor* salva in Redis:
+- l’ultima lettura disponibile per ciascun piano;
+- uno storico indicizzato temporalmente tramite Sorted Set.  
+
+Vantaggi:
+- **Velocità**: accesso sub-ms ai dati.
+- **Analisi real-time**: query rapide per pattern di consumo e rilevamento anomalie.
+- **Supporto a stream di eventi**: Redis può memorizzare e distribuire alert o notifiche.
+
+---
+
+### SQLite
+SQLite viene utilizzato dall’*archiver* per archiviare lo **storico cumulativo** delle letture.  
+Tutte le misurazioni sono salvate in un file `.db`, facilmente interrogabile tramite SQL, che consente:
+- **Analisi retrospettive** sui consumi.
+- **Reportistica** su intervalli temporali.
+- **Portabilità** del database (un unico file spostabile su altre macchine).
