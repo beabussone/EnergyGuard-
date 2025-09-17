@@ -1,16 +1,17 @@
-## EnergyGuard 
-# Sistema Distribuito per il monitoraggio e l'allerta precoce di consumi energetici anomali
-===========================================
+# EnergyGuard  
+## Sistema Distribuito per il monitoraggio e l'allerta precoce di consumi energetici anomali
 
-Spazio di lavoro per lo sviluppo del progetto del corso di Architetture dei Sistemi Distribuiti dell'Università Campus Bio-Medico di Roma.
+Spazio di lavoro per lo sviluppo del progetto del corso di **Architetture dei Sistemi Distribuiti** dell'Università Campus Bio-Medico di Roma.
 
-Questo progetto affronta lo sviluppo di un sistema per monitorare i consumi energetici di un edificio(simulati), identificare anomalie e generare allerte precoci
-------------------------
+Questo progetto affronta lo sviluppo di un sistema per monitorare i consumi energetici di un edificio (simulati), identificare anomalie e generare allerte precoci.
+
+---
 
 ## Obiettivo
 
 Costruire un'applicazione capace di leggere le misurazioni di sensori (simulati in questo caso) sui consumi energetici di un edificio e poter evidenziare casi di consumi anomali potenzialmente pericolosi.
-------------------------
+
+---
 
 ## Requisiti e Installazione
 
@@ -18,8 +19,6 @@ Per eseguire l'applicazione, scaricare le corrette dipendenze tramite:
 
 ```bash
 pip install -r requirements.txt
-```
-------------------------
 
 ## Funzionamento
 
