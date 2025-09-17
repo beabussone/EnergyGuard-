@@ -21,6 +21,7 @@ Per eseguire l'applicazione, scaricare le corrette dipendenze tramite:
 pip install -r requirements.txt
 ```
 
+---
 
 ## Funzionamento
 
