@@ -19,6 +19,8 @@ Per eseguire l'applicazione, scaricare le corrette dipendenze tramite:
 
 ```bash
 pip install -r requirements.txt
+```
+
 
 ## Funzionamento
 
