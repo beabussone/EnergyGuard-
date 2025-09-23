@@ -1,0 +1,28 @@
+# Dockerfile.kvstore
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Dipendenze
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# App
+COPY kvs_limited_cache.py ./
+
+# Imposta path DB nello stesso posto usato dal compose (bind mount ./data/kvX -> /data)
+ENV SQLITE_PATH=/data/shard.db \
+    MAX_CACHE_ITEMS=20000 \
+    MAX_CACHE_SIZE_BYTES=0
+
+# Espone la porta REALMENTE usata dal server
+EXPOSE 8100
+
+# Volume dove persistere SQLite
+VOLUME ["/data"]
+
+# Avvio FastAPI sul port 8100
+CMD ["uvicorn", "kvs_limited_cache:app", "--host", "0.0.0.0", "--port", "8100"]

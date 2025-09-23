@@ -1,0 +1,23 @@
+# Dockerfile.coordinator
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Dipendenze
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# App
+COPY coordinator.py ./
+
+# (Opzionale: default, ma il compose può sovrascriverli)
+ENV PORT=8000 REPLICATION_FACTOR=2 VIRTUAL_NODES=150 \
+    BOOTSTRAP_NODES=http://kv1:8100,http://kv2:8100,http://kv3:8100
+
+EXPOSE 8000
+
+# Avvio server FastAPI
+CMD ["uvicorn", "coordinator:app", "--host", "0.0.0.0", "--port", "8000"]

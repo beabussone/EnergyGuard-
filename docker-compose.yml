@@ -1,27 +1,113 @@
-version: "3.8"
+version: "3.9"
+
 services:
+  # --- Kafka (Bitnami, esposto su 9094) ---
   kafka:
     image: bitnami/kafka:latest
     container_name: kafka
     environment:
-      - KAFKA_CFG_NODE_ID=0
-      - KAFKA_CFG_PROCESS_ROLES=broker,controller
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    - KAFKA_CFG_NODE_ID=0
+    - KAFKA_CFG_PROCESS_ROLES=broker,controller
+    - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+    - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094   # <<< qui localhost
+    - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+    - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+    - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+    - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+    - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
     ports:
-      - "9094:9094"   # listener esterno (host)
+      - "9094:9094"
     networks:
       - energyguard
 
-  redis:
-    image: redis:7-alpine
-    container_name: redis
+  # --- Coordinator (consistent hash ring + proxy) ---
+  coordinator:
+    build:
+      context: .
+      dockerfile: Dockerfile.coordinator
+    container_name: coordinator
+    environment:
+      - PORT=8000
+      - REPLICATION_FACTOR=2
+      - VIRTUAL_NODES=150
+      - BOOTSTRAP_NODES=http://kv1:8100,http://kv2:8100,http://kv3:8100
     ports:
-      - "6379:6379"
+      - "8000:8000"
+    depends_on:
+      - kv1
+      - kv2
+      - kv3
+    networks:
+      - energyguard
+
+  # --- KVS nodes (FastAPI + SQLite + cache LRU) ---
+  kv1:
+    build:
+      context: .
+      dockerfile: Dockerfile.kvstore
+    container_name: kv1
+    environment:
+      - PORT=8100
+      - MAX_CACHE_ITEMS=20000
+      - MAX_CACHE_SIZE_BYTES=0
+      - SQLITE_PATH=/data/shard.db
+    volumes:
+      - ./data/kv1:/data         # bind mount locale: vedrai ./data/kv1/shard.db
+    ports:
+      - "8101:8100"
+    networks:
+      - energyguard
+
+  kv2:
+    build:
+      context: .
+      dockerfile: Dockerfile.kvstore
+    container_name: kv2
+    environment:
+      - PORT=8100
+      - MAX_CACHE_ITEMS=20000
+      - MAX_CACHE_SIZE_BYTES=0
+      - SQLITE_PATH=/data/shard.db
+    volumes:
+      - ./data/kv2:/data
+    ports:
+      - "8102:8100"
+    networks:
+      - energyguard
+
+  kv3:
+    build:
+      context: .
+      dockerfile: Dockerfile.kvstore
+    container_name: kv3
+    environment:
+      - PORT=8100
+      - MAX_CACHE_ITEMS=20000
+      - MAX_CACHE_SIZE_BYTES=0
+      - SQLITE_PATH=/data/shard.db
+    volumes:
+      - ./data/kv3:/data
+    ports:
+      - "8103:8100"
+    networks:
+      - energyguard
+
+  # --- Job opzionale: registra i nodi nel ring all'avvio ---
+  register:
+    image: curlimages/curl:8.10.1
+    container_name: register
+    depends_on:
+      - coordinator
+      - kv1
+      - kv2
+      - kv3
+    entrypoint: ["/bin/sh","-c"]
+    command: >
+      "sleep 5 &&
+       curl -s -X POST http://coordinator:8000/sharding/add-node/http://kv1:8100 &&
+       curl -s -X POST http://coordinator:8000/sharding/add-node/http://kv2:8100 &&
+       curl -s -X POST http://coordinator:8000/sharding/add-node/http://kv3:8100 &&
+       tail -f /dev/null"
     networks:
       - energyguard
 
