@@ -31,6 +31,7 @@ services:
       - REPLICATION_FACTOR=2
       - VIRTUAL_NODES=150
       - BOOTSTRAP_NODES=http://kv1:8100,http://kv2:8100,http://kv3:8100
+      - ADMIN_TOKEN=eg-admin-token
     ports:
       - "8000:8000"
     depends_on:
@@ -110,6 +111,30 @@ services:
        tail -f /dev/null"
     networks:
       - energyguard
+  
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+    container_name: webapp
+    ports:
+      - "3000:80"
+    depends_on:
+      - coordinator
+    networks:
+      - energyguard
+
+  login:
+    build:
+        context: ./webapp/login_service
+        dockerfile: Dockerfile 
+    container_name: login
+    environment:
+        - PORT=7000
+    ports:
+        - "7001:7000"
+    networks:
+        - energyguard
 
 networks:
   energyguard:
