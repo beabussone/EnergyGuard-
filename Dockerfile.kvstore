@@ -11,7 +11,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # App
-COPY kvs_limited_cache.py ./
+COPY src/kvs_limited_cache.py ./kvs_limited_cache.py
 
 # Imposta path DB nello stesso posto usato dal compose (bind mount ./data/kvX -> /data)
 ENV SQLITE_PATH=/data/shard.db \

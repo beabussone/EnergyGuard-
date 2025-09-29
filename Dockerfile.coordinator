@@ -11,7 +11,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # App
-COPY coordinator.py ./
+COPY src/coordinator.py ./coordinator.py
 
 # (Opzionale: default, ma il compose può sovrascriverli)
 ENV PORT=8000 REPLICATION_FACTOR=2 VIRTUAL_NODES=150 \
