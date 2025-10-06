@@ -163,6 +163,53 @@ Nel nostro progetto il servizio `kafka` del `docker-compose` avvia un broker Bit
 - Per ricostruire l'elenco delle ultime letture la webapp interroga l'indice `energy:p{n}:index` (generato dall'ingestor), che contiene un array ordinato degli ultimi timestamp disponibili per ogni piano, e scarica i relativi documenti storici dal KVS.
 - Richiede autenticazione bearer tramite il **Login Service** (`webapp/login_service`), che valida credenziali statiche e restituisce `{"token": ADMIN_TOKEN}`.
 
+#### Architettura webapp
+
+Il diagramma seguente riassume le componenti principali della dashboard e la loro interazione con i servizi backend.
+
+```text
+               +------------------------------+
+               | Browser (React/Vite runtime) |
+               | `webapp/src/main.jsx`        |
+               +---------------+--------------+
+                               |
+                               v
+               +------------------------------+
+               | App shell & routing          |
+               | `App.jsx` + `auth.jsx`       |
+               +-------+-----------+----------+
+                       |           |
+                       |           |
+                       v           v
+        +--------------------+   +----------------------+
+        | Dashboard/Admin UI |   | Login view & modal   |
+        | `pages/Admin.jsx`  |   | `pages/Login.jsx`    |
+        +----------+---------+   +----------+-----------+
+                   |                        |
+                   |                        | HTTP POST /login
+                   v                        v
+        +--------------------+    +----------------------------+
+        | API client (axios) |<-->| Login service FastAPI      |
+        | `webapp/src/api.js`|    | `webapp/login_service/`    |
+        +----------+---------+    +-------------+--------------+
+                   |                           ^
+        REST GET/PUT                           |
+                   v                           | token JSON
+        +--------------------+                |
+        | Coordinator APIs   |<---------------+
+        | `/notifications`,  |
+        | `/admin/thresholds`|
+        +----------+---------+
+                   |
+        SSE `/anomalies/stream`
+                   |
+                   v
+        +--------------------+
+        | EventSource handler|
+        | `api.js` -> UI state|
+        +--------------------+
+```
+
 #### Login amministratore
 La webapp mostra un form di autenticazione: le credenziali (default `admin` / `admin`) vengono inviate al servizio FastAPI `login`, che verifica i valori rispetto alle variabili `ADMIN_USER` e `ADMIN_PASS`. Se la verifica va a buon fine il servizio risponde con un JSON `{"token": ADMIN_TOKEN}`.
 
