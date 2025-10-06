@@ -33,7 +33,7 @@ EnergyGuard è una piattaforma didattica sviluppata per il corso di **Architettu
 ```text
           +-------------------+
           |   Sensor Simulator|
-          | (ΔkWh, kW, A, V)  |
+          | (?kWh, kW, A, V)  |
           +---------+---------+
                     |
                     v
@@ -67,11 +67,17 @@ EnergyGuard è una piattaforma didattica sviluppata per il corso di **Architettu
         +--------+------+---------------+
                  |
                  v
-         +--------------------+
-         | Anomaly Detector   |
-         | + SSE Broadcast    |
-         +---------+----------+
-                   |
+         +--------------------+        +------------------------------+
+         | Anomaly Detector   |<------>| Historical Stats Cache & DB |
+         | + SSE Broadcast    |        | (historical_stats.py + SQLite)|
+         +---------+----------+        +---------------+--------------+
+                   |                                   ^
+                   |                                   |
+                   |                    +--------------+----------------+
+                   |                    | populate_historical_db.py     |
+                   |                    | (dataset sintetico offline)   |
+                   |                    +-------------------------------+
+                   v
            +-------+--------+
            |   Web Dashboard |
            | (React + SSE)   |
