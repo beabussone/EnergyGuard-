@@ -1,0 +1,27 @@
+# Dockerfile.anomaly
+# Costruisce il container che calcola le anomalie e aggiorna il DB storico.
+FROM python:3.11-slim
+
+# Non creare __pycache__ e mostrare subito i log sullo stdout del container.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Installa le dipendenze Python condivise dai microservizi.
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia il detector e i moduli che gestiscono statistiche e bootstrap storico.
+COPY src/anomaly_detector.py ./anomaly_detector.py
+COPY src/historical_stats.py ./historical_stats.py
+COPY src/populate_historical_db.py ./populate_historical_db.py
+
+# Il detector si aspetta di scrivere il DB sotto /data (volume montato dal compose).
+RUN mkdir -p /data
+
+# Espone il percorso del database storico richiesto dagli script del progetto.
+ENV HISTORICAL_DB_PATH=/data/historical_readings.db
+
+# Avvio del processo principale (modalita -u per flush immediato dei log).
+CMD ["python", "-u", "anomaly_detector.py"]

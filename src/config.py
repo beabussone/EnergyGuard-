@@ -1,6 +1,10 @@
+"""Configurazione di default per i servizi locali EnergyGuard."""
+
 from pydantic import BaseModel
 
 class Settings(BaseModel):
+    """Imposta endpoint di Kafka e Redis usati dagli script di servizio."""
+
     kafka_bootstrap: str = "localhost:9094"
     kafka_topic: str = "energyguard.readings"
     kafka_group_id: str = "energyguard-consumer"

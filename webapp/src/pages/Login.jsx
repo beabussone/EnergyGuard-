@@ -1,65 +1,70 @@
-import { useState } from "react";
+// src/pages/Login.jsx
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { loginRequest, setAuthToken } from "../api";
+import { setAuthToken, loginRequest } from "../api"; // <-- percorso corretto
 
 export default function Login({ onLogged }) {
-  const [username, setU] = useState("");
-  const [password, setP] = useState("");
-  const [err, setErr] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError]       = useState(null);
+  const [loading, setLoading]   = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
 
-  async function submit(e) {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setErr("");
+    setLoading(true);
+    setError(null);
+
     try {
-      const res = await loginRequest(username, password); // { token }
-      if (!res?.token) {
-        setErr("Login: risposta senza token");
-        return;
-      }
+      const res = await loginRequest(username, password);
 
       // salva e attiva il token per le chiamate axios
-      localStorage.setItem("eg_token", res.token);
+      sessionStorage.setItem("eg_token", res.token);
       setAuthToken(res.token);
 
       // NOTIFICA il parent con il token (così aggiorna lo stato logged)
       onLogged?.(res.token);
 
-      // naviga alla destinazione protetta o a /admin
+      // naviga alla destinazione protetta (microtask -> evita tempi di propagazione stato)
       const dest = location.state?.from?.pathname || "/admin";
-      navigate(dest, { replace: true });
+      queueMicrotask(() => navigate(dest, { replace: true }));
     } catch (e) {
-      const msg =
-        (e.response && (e.response.data?.detail || e.response.statusText)) ||
-        e.message ||
-        "Errore di rete/CORS";
-      setErr(`Credenziali non valide o errore: ${msg}`);
+      const msg = e?.response?.data?.detail || e.message || "Login fallito";
+      setError(msg);
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="card" style={{ maxWidth: 360, margin: "40px auto" }}>
-      <h2 className="h">Login Amministratore</h2>
-      <form onSubmit={submit} className="kpi" style={{ gap: 8 }}>
-        <input
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setU(e.target.value)}
-        />
-        <input
-          placeholder="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setP(e.target.value)}
-        />
-        <button type="submit">Entra</button>
-        {err && <div className="badge" style={{ background: "#fdd" }}>{err}</div>}
+    <div className="login-page">
+      <h2>Login Admin</h2>
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label>Username</label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            disabled={loading}
+          />
+        </div>
+        <div>
+          <label>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
+          />
+        </div>
+        {error && <p style={{ color: "red" }}>{error}</p>}
+        <button type="submit" disabled={loading}>
+          {loading ? "Attendere..." : "Login"}
+        </button>
       </form>
-      <div className="label" style={{ marginTop: 8 }}>
-        Hint: admin / admin (in dev)
-      </div>
     </div>
   );
 }

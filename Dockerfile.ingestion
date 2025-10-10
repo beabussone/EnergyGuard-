@@ -1,0 +1,19 @@
+# Dockerfile.ingestion
+# Servizio che consuma dati dal topic Kafka e li riversa nel coordinator.
+FROM python:3.11-slim
+
+# Impostazioni standard per evitare cache ed avere log immediati.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Installa le dipendenze (confluent-kafka, requests, ecc.).
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia lo script di ingestion nella root applicativa.
+COPY src/ingestion_service.py ./ingestion_service.py
+
+# Avvia lo script in modalità unbuffered così i log arrivano subito sul broker.
+CMD ["python", "-u", "ingestion_service.py"]

@@ -15,6 +15,7 @@ EnergyGuard è una piattaforma didattica sviluppata per il corso di **Architettu
 - [Interfacce e API](#interfacce-e-api)
 - [Configurazione](#configurazione)
 - [Struttura della repository](#struttura-della-repository)
+- [Test](#test)
 - [Troubleshooting & suggerimenti](#troubleshooting--suggerimenti)
 
 ---
@@ -409,6 +410,13 @@ Le tabelle seguenti elencano le principali variabili d'ambiente e flag che contr
 - `docker-compose.yml` – definizione completa dei servizi.
 - `Dockerfile.coordinator` / `Dockerfile.kvstore` / `Dockerfile.ingestion` / `Dockerfile.anomaly` – immagini custom per i microservizi Python.
 - `launch_os.sh`, `launch.bat` – script di avvio rapidi (facoltativi).
+
+---
+
+## Test
+- Esegui `pytest -q` per lanciare la suite automatizzata (unit test su simulatore e anomaly detector, più un’integrazione ingestione→detector con coordinator fittizio).
+- Se hai un ambiente con restrizioni, imposta `TMPDIR=$(pwd)/.tmp pytest -q` per garantire una directory temporanea accessibile.
+- Ulteriori dettagli, scenari coperti e risultati attesi sono descritti in `TESTING.md`.
 
 ---
 

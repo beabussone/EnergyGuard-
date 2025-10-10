@@ -1,0 +1,19 @@
+# Dockerfile.simulator
+# Contenitore che genera letture sintetiche e le pubblica su Kafka.
+FROM python:3.11-slim
+
+# Mantiene i log immediati e evita file di bytecode inutili.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Installa le dipendenze richieste dal simulatore (confluent-kafka, ecc.).
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia tutti i sorgenti per consentire override di parametri da compose.
+COPY src ./src
+
+# Avvia il simulatore in modo unbuffered così gli stdout finiscono nel log docker.
+CMD ["python", "-u", "src/sensor_simulator.py"]

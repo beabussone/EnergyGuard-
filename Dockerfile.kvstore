@@ -1,28 +1,30 @@
 # Dockerfile.kvstore
+# Nodo KVS basato su FastAPI con cache in memoria e SQLite persistente.
 FROM python:3.11-slim
 
+# Evita bytecode e consente log immediati utili per il debug del cluster.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Dipendenze
+# Installa le dipendenze (FastAPI, uvicorn, sqlite-utils, ecc.).
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# App
+# Copia l'implementazione del key-value store nel container.
 COPY src/kvs_limited_cache.py ./kvs_limited_cache.py
 
-# Imposta path DB nello stesso posto usato dal compose (bind mount ./data/kvX -> /data)
+# Variabili coerenti con i mount definiti nel docker-compose.
 ENV SQLITE_PATH=/data/shard.db \
     MAX_CACHE_ITEMS=20000 \
     MAX_CACHE_SIZE_BYTES=0
 
-# Espone la porta REALMENTE usata dal server
+# Espone la porta reale del servizio HTTP.
 EXPOSE 8100
 
-# Volume dove persistere SQLite
+# Volume che ospita il file SQLite di questo shard.
 VOLUME ["/data"]
 
-# Avvio FastAPI sul port 8100
+# Esegue uvicorn lasciando ascolto su tutte le interfacce del container.
 CMD ["uvicorn", "kvs_limited_cache:app", "--host", "0.0.0.0", "--port", "8100"]

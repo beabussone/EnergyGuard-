@@ -1,23 +1,25 @@
 # Dockerfile.coordinator
+# Container FastAPI che gestisce il ring KVS, soglie e notifiche SSE.
 FROM python:3.11-slim
 
+# Evita bytecode e forza flush dei log per debug immediato.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Dipendenze
+# Installa le librerie comuni (FastAPI, httpx, ecc.).
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# App
+# Copia il coordinatore nel workspace del container.
 COPY src/coordinator.py ./coordinator.py
 
-# (Opzionale: default, ma il compose può sovrascriverli)
+# Valori di default pensati per il docker-compose (sovrascrivibili a runtime).
 ENV PORT=8000 REPLICATION_FACTOR=2 VIRTUAL_NODES=150 \
     BOOTSTRAP_NODES=http://kv1:8100,http://kv2:8100,http://kv3:8100
 
 EXPOSE 8000
 
-# Avvio server FastAPI
+# Uvicorn espone la FastAPI; host 0.0.0.0 richiesto in container.
 CMD ["uvicorn", "coordinator:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,3 +1,5 @@
+"""KVS FastAPI con cache LRU e persistenza SQLite per EnergyGuard."""
+
 import os
 import json
 import time
@@ -29,12 +31,16 @@ class ValueOut(BaseModel):
 # Cache LRU con TTL
 # ------------------------------------------------------------
 class LRUCacheTTL:
+    """Implementa una piccola cache LRU con supporto TTL opzionale."""
+
     def __init__(self, capacity: int):
         self.capacity = max(0, capacity)
         self.data: OrderedDict[str, Tuple[float, Optional[float], dict]] = OrderedDict()
         # mappa: key -> (last_access_ts, expire_ts, value)
 
     def get(self, key: str):
+        """Restituisce un valore valido dalla cache aggiornando l'ordine LRU."""
+
         if self.capacity == 0:
             return None
         item = self.data.get(key)
@@ -52,6 +58,8 @@ class LRUCacheTTL:
         return value
 
     def put(self, key: str, value: dict, ttl: Optional[int]):
+        """Inserisce o aggiorna una voce nella cache rispettando la capacita."""
+
         if self.capacity == 0:
             return
         expire_ts = time.time() + ttl if ttl else None
@@ -62,6 +70,8 @@ class LRUCacheTTL:
             self.data.popitem(last=False)
 
     def delete(self, key: str):
+        """Rimuove una voce dalla cache se presente."""
+
         self.data.pop(key, None)
 
 cache = LRUCacheTTL(MAX_CACHE_ITEMS)
@@ -70,6 +80,8 @@ cache = LRUCacheTTL(MAX_CACHE_ITEMS)
 # Persistenza SQLite
 # ------------------------------------------------------------
 def db_connect():
+    """Inizializza il database SQLite e garantisce la presenza della tabella."""
+
     os.makedirs(os.path.dirname(SQLITE_PATH), exist_ok=True)
     conn = sqlite3.connect(SQLITE_PATH, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
@@ -87,6 +99,8 @@ def db_connect():
 conn = db_connect()
 
 def db_get(key: str) -> Optional[Tuple[dict, Optional[float]]]:
+    """Legge la chiave dal database verificando eventuale scadenza."""
+
     cur = conn.execute("SELECT v, expire FROM kv WHERE k = ?", (key,))
     row = cur.fetchone()
     if not row:
@@ -103,6 +117,8 @@ def db_get(key: str) -> Optional[Tuple[dict, Optional[float]]]:
         return None
 
 def db_put(key: str, value: dict, ttl: Optional[int]):
+    """Salva o aggiorna il valore JSON nel database con TTL opzionale."""
+
     expire = time.time() + ttl if ttl else None
     v_str = json.dumps(value, separators=(",", ":"), ensure_ascii=False)
     conn.execute(
@@ -113,6 +129,8 @@ def db_put(key: str, value: dict, ttl: Optional[int]):
     conn.commit()
 
 def db_delete(key: str):
+    """Elimina la chiave dal database persistente."""
+
     conn.execute("DELETE FROM kv WHERE k = ?", (key,))
     conn.commit()
 
@@ -123,6 +141,8 @@ app = FastAPI(title="EnergyGuard KVS Node", version="1.0.0")
 
 @app.get("/health")
 def health():
+    """Verifica che il database sia raggiungibile esponendo stato ok/errore."""
+
     # ping minimale e verifica accesso al DB
     try:
         conn.execute("SELECT 1;")
@@ -132,6 +152,8 @@ def health():
 
 @app.get("/stats")
 def stats():
+    """Espone statistiche basilari di cache e archivio persistente."""
+
     cur = conn.execute("SELECT COUNT(*) FROM kv;")
     (count,) = cur.fetchone()
     return {
@@ -144,6 +166,8 @@ def stats():
 
 @app.put("/key/{key:path}")
 def put_key(key: str, body: ValueIn):
+    """Persistenza del valore e aggiornamento della cache per una chiave."""
+
     # salva su DB
     ttl = body.ttl if body.ttl is not None else DEFAULT_TTL
     db_put(key, body.value, ttl)
@@ -153,6 +177,8 @@ def put_key(key: str, body: ValueIn):
 
 @app.get("/key/{key:path}", response_model=ValueOut)
 def get_key(key: str):
+    """Recupera la chiave sfruttando prima la cache poi il database."""
+
     # prima cache
     v = cache.get(key)
     if v is not None:
@@ -172,6 +198,8 @@ def get_key(key: str):
 
 @app.delete("/key/{key:path}")
 def delete_key(key: str):
+    """Cancella la chiave sia dal database che dalla cache."""
+
     db_delete(key)
     cache.delete(key)
     return {"status": "ok"}

@@ -1,26 +1,27 @@
 version: "3.9"
 
+# Stack completo EnergyGuard: pipeline dati, storage e interfacce.
 services:
-  # --- Kafka (Bitnami, esposto su 9094) ---
+  # Broker Kafka single-node usato da simulatore e ingestion.
   kafka:
     image: bitnami/kafka:latest
     container_name: kafka
     environment:
-    - KAFKA_CFG_NODE_ID=0
-    - KAFKA_CFG_PROCESS_ROLES=broker,controller
-    - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-    - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094   # <<< qui localhost
-    - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
-    - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-    - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
-    - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-    - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
     ports:
       - "9094:9094"
     networks:
       - energyguard
 
-  # --- Coordinator (consistent hash ring + proxy) ---
+  # API centrale: sharding, configurazione soglie, notifiche SSE.
   coordinator:
     build:
       context: .
@@ -41,7 +42,7 @@ services:
     networks:
       - energyguard
 
-  # --- KVS nodes (FastAPI + SQLite + cache LRU) ---
+  # Primo shard KVS (FastAPI + SQLite) montato su ./data/kv1.
   kv1:
     build:
       context: .
@@ -53,12 +54,13 @@ services:
       - MAX_CACHE_SIZE_BYTES=0
       - SQLITE_PATH=/data/shard.db
     volumes:
-      - ./data/kv1:/data         # bind mount locale: vedrai ./data/kv1/shard.db
+      - ./data/kv1:/data
     ports:
       - "8101:8100"
     networks:
       - energyguard
 
+  # Secondo shard KVS (replica identica, diversa cartella dati).
   kv2:
     build:
       context: .
@@ -76,6 +78,7 @@ services:
     networks:
       - energyguard
 
+  # Terzo shard KVS per aumentare ridondanza e bilanciamento.
   kv3:
     build:
       context: .
@@ -93,7 +96,7 @@ services:
     networks:
       - energyguard
 
-  # --- Job opzionale: registra i nodi nel ring all'avvio ---
+  # Container effimero che registra i nodi KVS presso il coordinator.
   register:
     image: curlimages/curl:8.10.1
     container_name: register
@@ -111,7 +114,97 @@ services:
        tail -f /dev/null"
     networks:
       - energyguard
-  
+
+  # Consumer Kafka che scrive i dati grezzi nel KVS via coordinator.
+  ingestion:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    container_name: ingestion
+    depends_on:
+      - kafka
+      - coordinator
+    command:
+      - python
+      - -u
+      - ingestion_service.py
+      - --kafka-bootstrap
+      - kafka:9092
+      - --coordinator-url
+      - http://coordinator:8000
+    networks:
+      - energyguard
+
+  # Servizio che legge le ultime letture, calcola anomalie e invia alert.
+  anomaly_detector:
+    build:
+      context: .
+      dockerfile: Dockerfile.anomaly
+    container_name: anomaly_detector
+    depends_on:
+      - coordinator
+      - kafka
+    environment:
+      - COORDINATOR_URL=http://coordinator:8000
+      - KAFKA_BOOTSTRAP=kafka:9094
+      - HISTORICAL_DB_PATH=/data/historical_readings.db
+      - ANOM_K_SIGMA=1.6
+      - ANOM_MIN_N=18
+      - ANOM_THRESHOLD_MARGIN=0.0
+      - STATS_REFRESH_SECS=900
+      - DETECTOR_POLL_SECS=0.5
+    volumes:
+      - ./data:/data
+      - ./src:/app/src
+    networks:
+      - energyguard
+    restart: unless-stopped
+
+  # Generatore di letture sintetiche che popola il topic Kafka.
+  simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile.simulator
+    container_name: simulator
+    depends_on:
+      - kafka
+    command: >
+      /bin/sh -lc "exec python -u src/sensor_simulator.py"
+    environment:
+      - SIM_KAFKA_BOOTSTRAP=kafka:9092
+      - SIM_TOPIC=energyguard.readings
+      - SIM_INTERVAL_SECONDS=5
+      # 🔧 Parametri di variabilità (puoi regolarli)
+      - SIM_NOISE_KW_STD=1.4
+      - SIM_NOISE_A_STD=0.45
+      - SIM_NOISE_V_STD=4.5
+      - SIM_BASELINE_JITTER_STD=0.35
+      - SIM_BASE_KW_FLOOR1=6.0
+      - SIM_BASE_KW_FLOOR2=6.6
+      - SIM_BASE_KW_FLOOR3=7.2
+      - SIM_AMP_PER_KW=2.8
+      - SIM_AMP_SPIKE_COUPLING=0.05
+      - SIM_OUTLIER_PROB=0.065
+      - SIM_OUTLIER_SEQUENCE=kw,kw,a,v,kw,dkwh,v,a
+      - SIM_OUTLIER_KW_FACTOR=3.0
+      - SIM_OUTLIER_A_FACTOR=1.8
+      - SIM_OUTLIER_V_BUMP=35
+      - SIM_KWH_SPIKE_PROB=0.18
+      - SIM_KWH_SPIKE_MULT=2.8
+      - SIM_SHIFT_PROB=0.07
+      - SIM_SHIFT_FACTOR=0.55
+      - SIM_SHIFT_DURATION_MIN=160
+      - SIM_SHIFT_DURATION_MAX=340
+      - SIM_DRIFT_STEP_KW=0.16
+      - SIM_DRIFT_STEP_V=0.7
+      - SIM_BASE_VOLT=227.0
+    volumes:
+      - ./src:/app/src
+    networks:
+      - energyguard
+    restart: unless-stopped
+
+  # Front-end React/NGINX che visualizza consumi e alert in tempo reale.
   webapp:
     build:
       context: ./webapp
@@ -124,18 +217,21 @@ services:
     networks:
       - energyguard
 
+  # Microservizio di login a supporto della webapp (form utente demo).
   login:
     build:
-        context: ./webapp/login_service
-        dockerfile: Dockerfile 
+      context: ./webapp/login_service
+      dockerfile: Dockerfile
     container_name: login
     environment:
-        - PORT=7000
+      - PORT=7000
     ports:
-        - "7001:7000"
+      - "7001:7000"
     networks:
-        - energyguard
+      - energyguard
 
 networks:
   energyguard:
     driver: bridge
+
+

@@ -1,8 +1,11 @@
+"""Modelli Pydantic condivisi fra i servizi EnergyGuard."""
+
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Literal
 from datetime import datetime
 
 class Reading(BaseModel):
+    """Valida una lettura di sensori trifase per i tre piani."""
     model_config = ConfigDict(extra="forbid")
 
     piano: Literal[1, 2, 3]
